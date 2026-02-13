@@ -163,29 +163,11 @@ variable "kube_version" {
   default     = null
 }
 
-variable "cluster_ready_when" {
-  type        = string
-  description = "The cluster is ready based on one of the following: MasterNodeReady, OneWorkerNodeReady, Normal, IngressReady"
-  default     = "IngressReady"
-  validation {
-    condition     = contains(["MasterNodeReady", "OneWorkerNodeReady", "Normal", "IngressReady"], var.cluster_ready_when)
-    error_message = "The input variable cluster_ready_when must be one of: \"MasterNodeReady\", \"OneWorkerNodeReady\", \"Normal\" or \"IngressReady\"."
-  }
-}
-
-variable "disable_public_endpoint" {
-  type        = bool
-  description = "Whether access to the public service endpoint is disabled when the cluster is created. Does not affect existing clusters."
-  default     = false
-}
-
 variable "force_delete_storage" {
   type        = bool
   description = "Flag indicating whether or not to delete attached storage when destroying the cluster."
   default     = false
 }
-
-
 
 variable "kms_config" {
   type = object({

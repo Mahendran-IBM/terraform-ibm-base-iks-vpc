@@ -13,7 +13,6 @@ locals {
 
   # security group attached to worker pool
   # the terraform provider / iks api take a security group id hardcoded to "cluster", so this pseudo-value is injected into the array based on attach_default_cluster_security_group
-  # see https://cloud.ibm.com/docs/openshift?topic=openshift-vpc-security-group&interface=ui#vpc-sg-cluster
 
   # attach_ibm_managed_security_group is true and custom_security_group_ids is not set => default behavior, so set to null
   # attach_ibm_managed_security_group is true and custom_security_group_ids is set => add "cluster" to the list of custom security group ids
@@ -30,7 +29,7 @@ data "ibm_container_cluster_versions" "cluster_versions" {
 }
 
 # ****************************************************************
-#                     CREATE A IKS CLUSTER                        
+#                     CREATE A IKS CLUSTER
 # ****************************************************************
 
 resource "ibm_container_vpc_cluster" "iks_cluster" {
@@ -40,12 +39,14 @@ resource "ibm_container_vpc_cluster" "iks_cluster" {
   tags              = var.tags
   kube_version      = local.kube_version
 
-  flavor           = local.default_pool.machine_type
-  worker_count     = local.default_pool.workers_per_zone
-  pod_subnet       = var.pod_subnet_cidr
-  service_subnet   = var.service_subnet_cidr
-  operating_system = local.default_pool.operating_system
-  security_groups  = local.cluster_security_groups
+  flavor                              = local.default_pool.machine_type
+  worker_count                        = local.default_pool.workers_per_zone
+  pod_subnet                          = var.pod_subnet_cidr
+  service_subnet                      = var.service_subnet_cidr
+  operating_system                    = local.default_pool.operating_system
+  security_groups                     = local.cluster_security_groups
+  force_delete_storage                = var.force_delete_storage
+  disable_outbound_traffic_protection = var.disable_outbound_traffic_protection
 
   # default workers are mapped to the subnets that are "private"
   dynamic "zones" {
@@ -102,10 +103,6 @@ resource "ibm_resource_tag" "cluster_access_tag" {
 ##############################################################################
 # Access cluster to kick off RBAC synchronisation
 ##############################################################################
-
-provider "kubernetes" {
-  config_path = data.ibm_container_cluster_config.cluster_config[0].config_file_path
-}
 
 data "ibm_container_cluster_config" "cluster_config" {
   count             = (var.verify_worker_network_readiness || lookup(var.addons, "cluster-autoscaler", null) != null) ? 1 : 0
@@ -262,7 +259,6 @@ resource "kubernetes_config_map_v1_data" "set_autoscaling" {
 # cluster. Note that the module attaches security group to existing loadbalancer
 # only. Re-run the module to attach security groups to new load balancers created
 # after the initial run of this module. The module detects new load balancers.
-# https://cloud.ibm.com/docs/openshift?topic=openshift-vpc-security-group&interface=ui#vpc-sg-vpe-alb
 ##############################################################################
 
 data "ibm_is_lbs" "all_lbs" {
@@ -290,7 +286,6 @@ module "attach_sg_to_lb" {
 # cluster. Note that the module attaches security group to existing loadbalancer
 # only. Re-run the module to attach security groups to new load balancers created
 # after the initial run of this module. The module detects new load balancers.
-# https://cloud.ibm.com/docs/openshift?topic=openshift-vpc-security-group&interface=ui#vpc-sg-vpe-alb
 ##############################################################################
 
 locals {

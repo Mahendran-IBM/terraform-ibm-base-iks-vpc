@@ -65,7 +65,6 @@ locals {
       machine_type     = "bx2.4x16"
       workers_per_zone = 2 # minimum of 2 is allowed when using single zone
       operating_system = "UBUNTU_24_64"
-      labels           = { kata-deploy = "true" }
     }
   ]
 }
@@ -81,10 +80,5 @@ module "iks_base" {
   vpc_subnets                         = local.cluster_vpc_subnets
   worker_pools                        = local.worker_pools
   access_tags                         = var.access_tags
-  disable_outbound_traffic_protection = true # set as True to enable outbound traffic; required for accessing Operator Hub in the OpenShift console.
-  addons = {
-    cluster-autoscaler = {
-      version = "2.0.0"
-    }
-  }
+  disable_outbound_traffic_protection = true # set as True to enable outbound traffic from cluster workers
 }

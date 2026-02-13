@@ -39,12 +39,6 @@ variable "worker_pools_taints" {
   default     = null
 }
 
-variable "ocp_entitlement" {
-  type        = string
-  description = "Value that is applied to the entitlements for OCP cluster provisioning"
-  default     = null
-}
-
 variable "vpc_subnets" {
   type = map(list(object({
     id         = string
@@ -56,14 +50,14 @@ variable "vpc_subnets" {
 
 variable "allow_default_worker_pool_replacement" {
   type        = bool
-  description = "(Advanced users) Set to true to allow the module to recreate a default worker pool. If you wish to make any change to the default worker pool which requires the re-creation of the default pool follow these [steps](https://github.com/terraform-ibm-modules/terraform-ibm-base-ocp-vpc?tab=readme-ov-file#important-considerations-for-terraform-and-default-worker-pool)."
+  description = "(Advanced users) Set to true to allow the module to recreate a default worker pool. If you wish to make any change to the default worker pool which requires the re-creation of the default pool follow these [steps](https://github.com/terraform-ibm-modules/terraform-ibm-base-iks-vpc"
   default     = false
   nullable    = false
 }
 
 variable "cluster_id" {
   type        = string
-  description = "ID of the existing openshift cluster."
+  description = "ID of the existing Kubernetes cluster."
 }
 
 variable "resource_group_id" {
