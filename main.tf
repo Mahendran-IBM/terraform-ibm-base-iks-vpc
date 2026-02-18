@@ -120,6 +120,7 @@ module "worker_pools" {
   cluster_id                            = local.cluster_id
   vpc_subnets                           = var.vpc_subnets
   worker_pools                          = var.worker_pools
+  ignore_worker_pool_size_changes       = var.ignore_worker_pool_size_changes
   allow_default_worker_pool_replacement = var.allow_default_worker_pool_replacement
 }
 

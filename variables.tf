@@ -156,6 +156,12 @@ variable "additional_vpe_security_group_ids" {
   default = {}
 }
 
+variable "ignore_worker_pool_size_changes" {
+  type        = bool
+  description = "Enable if using worker autoscaling. Stops Terraform managing worker count"
+  default     = false
+}
+
 # Kubernetes version (IKS)
 variable "kube_version" {
   type        = string
@@ -238,6 +244,18 @@ variable "addons" {
       parameters_json = optional(string)
     }))
     vpc-block-csi-driver = optional(object({
+      version         = optional(string)
+      parameters_json = optional(string)
+    }))
+    ibm-storage-operator = optional(object({
+      version         = optional(string)
+      parameters_json = optional(string)
+    }))
+    diagnostics-and-debug-tool = optional(object({
+      version         = optional(string)
+      parameters_json = optional(string)
+    }))
+    alb-oauth-proxy = optional(object({
       version         = optional(string)
       parameters_json = optional(string)
     }))

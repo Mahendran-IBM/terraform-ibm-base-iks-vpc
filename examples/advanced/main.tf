@@ -12,38 +12,6 @@ module "resource_group" {
 }
 
 ########################################################################################################################
-# VPC + Subnet + Public Gateway
-#
-# NOTE: This is a very simple VPC with single subnet in a single zone with a public gateway enabled, that will allow
-# all traffic ingress/egress by default.
-# For production use cases this would need to be enhanced by adding more subnets and zones for resiliency, and
-# ACLs/Security Groups for network security.
-########################################################################################################################
-
-resource "ibm_is_vpc" "vpc" {
-  name                      = "${var.prefix}-vpc"
-  resource_group            = module.resource_group.resource_group_id
-  address_prefix_management = "auto"
-  tags                      = var.resource_tags
-}
-
-resource "ibm_is_public_gateway" "gateway" {
-  name           = "${var.prefix}-gateway-1"
-  vpc            = ibm_is_vpc.vpc.id
-  resource_group = module.resource_group.resource_group_id
-  zone           = "${var.region}-1"
-}
-
-resource "ibm_is_subnet" "subnet_zone_1" {
-  name                     = "${var.prefix}-subnet-1"
-  vpc                      = ibm_is_vpc.vpc.id
-  resource_group           = module.resource_group.resource_group_id
-  zone                     = "${var.region}-1"
-  total_ipv4_address_count = 256
-  public_gateway           = ibm_is_public_gateway.gateway.id
-}
-
-########################################################################################################################
 # Key Protect
 ########################################################################################################################
 
@@ -55,7 +23,7 @@ locals {
 
 module "kp_all_inclusive" {
   source                    = "terraform-ibm-modules/kms-all-inclusive/ibm"
-  version                   = "5.5.21"
+  version                   = "5.5.27"
   key_protect_instance_name = "${var.prefix}-kp-instance"
   resource_group_id         = module.resource_group.resource_group_id
   region                    = var.region
@@ -76,19 +44,65 @@ module "kp_all_inclusive" {
 }
 
 ########################################################################################################################
-#  VPC cluster (single zone)
+# VPC
+########################################################################################################################
+
+resource "ibm_is_vpc" "vpc" {
+  name                      = "${var.prefix}-vpc"
+  resource_group            = module.resource_group.resource_group_id
+  address_prefix_management = "auto"
+  tags                      = var.resource_tags
+}
+
+########################################################################################################################
+# Public Gateway in zone 1 only
+########################################################################################################################
+
+resource "ibm_is_public_gateway" "gateway" {
+  for_each       = toset(["1", "2", "3"])
+  name           = "${var.prefix}-gateway-${each.key}"
+  vpc            = ibm_is_vpc.vpc.id
+  resource_group = module.resource_group.resource_group_id
+  zone           = "${var.region}-${each.key}"
+}
+
+########################################################################################################################
+# Subnets across 3 zones
+# Public gateway attached to all the zones
+########################################################################################################################
+
+resource "ibm_is_subnet" "subnets" {
+  for_each                 = toset(["1", "2", "3"])
+  name                     = "${var.prefix}-subnet-${each.key}"
+  vpc                      = ibm_is_vpc.vpc.id
+  resource_group           = module.resource_group.resource_group_id
+  zone                     = "${var.region}-${each.key}"
+  total_ipv4_address_count = 256
+  public_gateway           = ibm_is_public_gateway.gateway[each.key].id
+}
+
+########################################################################################################################
+#  VPC cluster (multi zone)
 ########################################################################################################################
 
 locals {
+  # list of subnets in all zones
+  subnets = [
+    for subnet in ibm_is_subnet.subnets :
+    {
+      id         = subnet.id
+      zone       = subnet.zone
+      cidr_block = subnet.ipv4_cidr_block
+    }
+  ]
+
+  # mapping of cluster worker pool names to subnets
   cluster_vpc_subnets = {
-    default = [
-      {
-        id         = ibm_is_subnet.subnet_zone_1.id
-        cidr_block = ibm_is_subnet.subnet_zone_1.ipv4_cidr_block
-        zone       = ibm_is_subnet.subnet_zone_1.zone
-      }
-    ]
+    zone-1 = local.subnets,
+    zone-2 = local.subnets,
+    zone-3 = local.subnets
   }
+
   boot_volume_encryption_kms_config = {
     crk             = module.kp_all_inclusive.keys["${local.key_ring}.${local.boot_volume_key}"].key_id
     kms_instance_id = module.kp_all_inclusive.kms_guid
@@ -97,14 +111,56 @@ locals {
   worker_pools = [
     {
       subnet_prefix                     = "zone-1"
-      pool_name                         = "default"
-      machine_type                      = "bx2.4x16"
+      pool_name                         = "default" # ibm_container_vpc_cluster automatically names default pool "default" (See https://github.com/IBM-Cloud/terraform-provider-ibm/issues/2849)
+      machine_type                      = "mx2.4x32"
       workers_per_zone                  = 1
       operating_system                  = "UBUNTU_24_64"
       enableAutoscaling                 = true
       minSize                           = 1
       maxSize                           = 6
       boot_volume_encryption_kms_config = local.boot_volume_encryption_kms_config
+    },
+    {
+      subnet_prefix                     = "zone-2"
+      pool_name                         = "zone-2"
+      machine_type                      = "bx2.4x16"
+      workers_per_zone                  = 1
+      secondary_storage                 = "300gb.5iops-tier"
+      operating_system                  = "UBUNTU_24_64"
+      boot_volume_encryption_kms_config = local.boot_volume_encryption_kms_config
+    },
+    {
+      subnet_prefix                     = "zone-3"
+      pool_name                         = "zone-3"
+      machine_type                      = "bx2.4x16"
+      workers_per_zone                  = 1
+      operating_system                  = "UBUNTU_24_64"
+      boot_volume_encryption_kms_config = local.boot_volume_encryption_kms_config
+    }
+  ]
+
+  worker_pools_taints = {
+    all     = []
+    default = []
+    zone-2 = [{
+      key    = "dedicated"
+      value  = "zone-2"
+      effect = "NoExecute"
+    }]
+    zone-3 = [{
+      key    = "dedicated"
+      value  = "zone-3"
+      effect = "NoExecute"
+    }]
+  }
+
+  worker_pool = [
+    {
+      subnet_prefix    = "zone-1"
+      pool_name        = "workerpool"
+      machine_type     = "bx2.4x16"
+      operating_system = "UBUNTU_24_64"
+      workers_per_zone = 2
     }
   ]
 }
@@ -120,14 +176,16 @@ module "iks_base" {
   vpc_subnets                         = local.cluster_vpc_subnets
   worker_pools                        = local.worker_pools
   access_tags                         = var.access_tags
+  worker_pools_taints                 = local.worker_pools_taints
   disable_outbound_traffic_protection = true # set as True to enable outbound traffic from cluster workers
+  ignore_worker_pool_size_changes     = true
   kms_config = {
     instance_id = module.kp_all_inclusive.kms_guid
     crk_id      = module.kp_all_inclusive.keys["${local.key_ring}.${local.cluster_key}"].key_id
   }
   addons = {
     cluster-autoscaler = {
-      version = "2.0.0"
+      version = "1.2.4"
     }
   }
 }
@@ -136,4 +194,79 @@ data "ibm_container_cluster_config" "cluster_config" {
   cluster_name_id   = module.iks_base.cluster_id
   resource_group_id = module.iks_base.resource_group_id
   config_dir        = "${path.module}/../../kubeconfig"
+}
+
+########################################################################################################################
+# Worker Pool
+########################################################################################################################
+
+module "worker_pool" {
+  source            = "../../modules/worker-pool"
+  resource_group_id = module.resource_group.resource_group_id
+  vpc_id            = ibm_is_vpc.vpc.id
+  cluster_id        = module.iks_base.cluster_id
+  vpc_subnets       = local.cluster_vpc_subnets
+  worker_pools      = local.worker_pool
+}
+
+########################################################################################################################
+# Observability (Instance + Agents)
+########################################################################################################################
+
+locals {
+  logs_agent_namespace = "ibm-observe"
+  logs_agent_name      = "logs-agent"
+}
+
+module "cloud_logs" {
+  source            = "terraform-ibm-modules/cloud-logs/ibm"
+  version           = "1.10.35"
+  resource_group_id = module.resource_group.resource_group_id
+  region            = var.region
+  plan              = "standard"
+  instance_name     = "${var.prefix}-cloud-logs"
+}
+
+module "trusted_profile" {
+  source                      = "terraform-ibm-modules/trusted-profile/ibm"
+  version                     = "3.2.17"
+  trusted_profile_name        = "${var.prefix}-profile"
+  trusted_profile_description = "Logs agent Trusted Profile"
+  # As a `Sender`, you can send logs to your IBM Cloud Logs service instance - but not query or tail logs. This role is meant to be used by agents and routers sending logs.
+  trusted_profile_policies = [{
+    roles             = ["Sender"]
+    unique_identifier = "${var.prefix}-profile-0"
+    resources = [{
+      service = "logs"
+    }]
+  }]
+  # Set up fine-grained authorization for `logs-agent` running in ROKS cluster in `ibm-observe` namespace.
+  trusted_profile_links = [{
+    cr_type           = "ROKS_SA"
+    unique_identifier = "${var.prefix}-profile"
+    links = [{
+      crn       = module.iks_base.cluster_crn
+      namespace = local.logs_agent_namespace
+      name      = local.logs_agent_name
+    }]
+    }
+  ]
+}
+
+module "logs_agents" {
+  source                        = "terraform-ibm-modules/logs-agent/ibm"
+  version                       = "1.17.5"
+  cluster_id                    = module.iks_base.cluster_id
+  cluster_resource_group_id     = module.resource_group.resource_group_id
+  logs_agent_trusted_profile_id = module.trusted_profile.trusted_profile.id
+  logs_agent_namespace          = local.logs_agent_namespace
+  logs_agent_name               = local.logs_agent_name
+  cloud_logs_ingress_endpoint   = module.cloud_logs.ingress_private_endpoint
+  cloud_logs_ingress_port       = 3443
+  # example of how to add additional metadata to the logs agents
+  logs_agent_additional_metadata = [{
+    key   = "cluster_id"
+    value = module.iks_base.cluster_id
+  }]
+  logs_agent_enable_scc = false
 }
