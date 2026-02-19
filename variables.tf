@@ -165,8 +165,16 @@ variable "ignore_worker_pool_size_changes" {
 # Kubernetes version (IKS)
 variable "kube_version" {
   type        = string
-  description = "The version of Kubernetes cluster that should be provisioned (format x.y.z). If no value is specified, the current default version is used. You can also specify `default`. This input is used only during initial cluster provisioning and is ignored for updates."
+  description = "The version of Kubernetes cluster that should be provisioned (format 1.x). If no value is specified, the current default version is used. You can also specify `default`. This input is used only during initial cluster provisioning and is ignored for updates."
   default     = null
+  validation {
+    condition = (
+      var.kube_version == null
+      || var.kube_version == "default"
+      || try(contains(local.valid_kube_versions, var.kube_version), false)
+    )
+    error_message = "Invalid kube_version provided. Supported versions are: ${join(", ", local.valid_kube_versions)}"
+  }
 }
 
 variable "force_delete_storage" {

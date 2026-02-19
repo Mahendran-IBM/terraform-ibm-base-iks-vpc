@@ -2,7 +2,10 @@ locals {
   # ibm_container_vpc_cluster automatically names default pool "default" (See https://github.com/IBM-Cloud/terraform-provider-ibm/issues/2849)
   default_pool = element([for pool in var.worker_pools : pool if pool.pool_name == "default"], 0)
 
-  kube_version = var.kube_version == null || var.kube_version == "default" ? data.ibm_container_cluster_versions.cluster_versions.default_kube_version : var.kube_version
+  default_kube_version = data.ibm_container_cluster_versions.cluster_versions.default_kube_version
+  kube_version         = var.kube_version == null || var.kube_version == "default" ? local.default_kube_version : var.kube_version
+  valid_versions_list  = data.ibm_container_cluster_versions.cluster_versions.valid_kube_versions
+  valid_kube_versions  = [for version in local.valid_versions_list : regex("^([0-9]+\\.[0-9]+)", version)[0]]
 
   delete_timeout = "2h"
   create_timeout = "3h"
@@ -24,21 +27,18 @@ locals {
 }
 
 # Lookup the current default kube version
-data "ibm_container_cluster_versions" "cluster_versions" {
-  resource_group_id = var.resource_group_id
-}
+data "ibm_container_cluster_versions" "cluster_versions" {}
 
 # ****************************************************************
 #                     CREATE A IKS CLUSTER
 # ****************************************************************
 
 resource "ibm_container_vpc_cluster" "iks_cluster" {
-  name              = var.cluster_name
-  vpc_id            = var.vpc_id
-  resource_group_id = var.resource_group_id
-  tags              = var.tags
-  kube_version      = local.kube_version
-
+  name                                = var.cluster_name
+  vpc_id                              = var.vpc_id
+  resource_group_id                   = var.resource_group_id
+  tags                                = var.tags
+  kube_version                        = local.kube_version
   flavor                              = local.default_pool.machine_type
   worker_count                        = local.default_pool.workers_per_zone
   pod_subnet                          = var.pod_subnet_cidr

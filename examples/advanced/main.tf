@@ -166,7 +166,10 @@ locals {
 }
 
 module "iks_base" {
-  source                              = "../.."
+  source = "../.."
+  # remove the above line and uncomment the below 2 lines to consume the module from the registry
+  # source            = "terraform-ibm-modules/base-iks-vpc/ibm"
+  # version           = "X.Y.Z" # Replace "X.Y.Z" with a release version to lock into a specific release
   resource_group_id                   = module.resource_group.resource_group_id
   region                              = var.region
   tags                                = var.resource_tags
@@ -201,7 +204,10 @@ data "ibm_container_cluster_config" "cluster_config" {
 ########################################################################################################################
 
 module "worker_pool" {
-  source            = "../../modules/worker-pool"
+  source = "../../modules/worker-pool"
+  # remove the above line and uncomment the below 2 lines to consume the module from the registry
+  # source            = "terraform-ibm-modules/base-iks-vpc/ibm//modules/worker-pool"
+  # version           = "X.Y.Z" # Replace "X.Y.Z" with a release version to lock into a specific release
   resource_group_id = module.resource_group.resource_group_id
   vpc_id            = ibm_is_vpc.vpc.id
   cluster_id        = module.iks_base.cluster_id
@@ -242,7 +248,7 @@ module "trusted_profile" {
   }]
   # Set up fine-grained authorization for `logs-agent` running in ROKS cluster in `ibm-observe` namespace.
   trusted_profile_links = [{
-    cr_type           = "ROKS_SA"
+    cr_type           = "IKS_SA"
     unique_identifier = "${var.prefix}-profile"
     links = [{
       crn       = module.iks_base.cluster_crn
@@ -268,5 +274,5 @@ module "logs_agents" {
     key   = "cluster_id"
     value = module.iks_base.cluster_id
   }]
-  logs_agent_enable_scc = false
+  logs_agent_enable_scc = false # only true for Openshift
 }
