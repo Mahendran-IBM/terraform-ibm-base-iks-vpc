@@ -177,6 +177,12 @@ variable "kube_version" {
   }
 }
 
+variable "enable_kube_version_upgrade" {
+  type        = bool
+  description = "When set to true, allows Terraform to manage major Kubernetes version upgrades. This is intended for advanced users who manually control major version upgrades. Defaults to false to avoid unintended drift from IBM-managed patch updates. NOTE: Enabling this on existing clusters requires a one-time terraform state migration."
+  default     = false
+}
+
 variable "force_delete_storage" {
   type        = bool
   description = "Flag indicating whether or not to delete attached storage when destroying the cluster."

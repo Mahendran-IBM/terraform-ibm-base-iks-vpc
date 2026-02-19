@@ -10,9 +10,8 @@ output "cluster_id" {
 
 output "cluster_name" {
   description = "Name of the cluster"
-  # robust access: handle both count=1 (indexed) and single resource forms
-  value      = ibm_container_vpc_cluster.iks_cluster.name
-  depends_on = [null_resource.confirm_network_healthy]
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].name : ibm_container_vpc_cluster.cluster_with_upgrade[0].name) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].name : ibm_container_vpc_cluster.iks_cluster[0].name)
+  depends_on  = [null_resource.confirm_network_healthy]
 }
 
 output "cluster_crn" {
@@ -28,12 +27,12 @@ output "workerpools" {
 
 output "kube_version" {
   description = "Kubernetes version of the cluster"
-  value       = ibm_container_vpc_cluster.iks_cluster.kube_version
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].kube_version : ibm_container_vpc_cluster.cluster_with_upgrade[0].kube_version) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].kube_version : ibm_container_vpc_cluster.iks_cluster[0].kube_version)
 }
 
 output "vpc_id" {
   description = "ID of the cluster's VPC"
-  value       = ibm_container_vpc_cluster.iks_cluster.vpc_id
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].vpc_id : ibm_container_vpc_cluster.cluster_with_upgrade[0].vpc_id) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].vpc_id : ibm_container_vpc_cluster.iks_cluster[0].vpc_id)
 }
 
 output "region" {
@@ -43,32 +42,32 @@ output "region" {
 
 output "resource_group_id" {
   description = "Resource group ID the cluster is deployed in"
-  value       = ibm_container_vpc_cluster.iks_cluster.resource_group_id
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].resource_group_id : ibm_container_vpc_cluster.cluster_with_upgrade[0].resource_group_id) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].resource_group_id : ibm_container_vpc_cluster.iks_cluster[0].resource_group_id)
 }
 
 output "ingress_hostname" {
   description = "The hostname that was assigned to your Ingress subdomain."
-  value       = ibm_container_vpc_cluster.iks_cluster.ingress_hostname
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].ingress_hostname : ibm_container_vpc_cluster.cluster_with_upgrade[0].ingress_hostname) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].ingress_hostname : ibm_container_vpc_cluster.iks_cluster[0].ingress_hostname)
 }
 
 output "private_service_endpoint_url" {
   description = "Private service endpoint URL"
-  value       = ibm_container_vpc_cluster.iks_cluster.private_service_endpoint_url
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].private_service_endpoint_url : ibm_container_vpc_cluster.cluster_with_upgrade[0].private_service_endpoint_url) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].private_service_endpoint_url : ibm_container_vpc_cluster.iks_cluster[0].private_service_endpoint_url)
 }
 
 output "public_service_endpoint_url" {
   description = "Public service endpoint URL"
-  value       = ibm_container_vpc_cluster.iks_cluster.public_service_endpoint_url
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].public_service_endpoint_url : ibm_container_vpc_cluster.cluster_with_upgrade[0].public_service_endpoint_url) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].public_service_endpoint_url : ibm_container_vpc_cluster.iks_cluster[0].public_service_endpoint_url)
 }
 
 output "master_url" {
   description = "The URL of the Kubernetes master."
-  value       = ibm_container_vpc_cluster.iks_cluster.master_url
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].master_url : ibm_container_vpc_cluster.cluster_with_upgrade[0].master_url) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].master_url : ibm_container_vpc_cluster.iks_cluster[0].master_url)
 }
 
 output "vpe_url" {
   description = "The virtual private endpoint URL of the Kubernetes cluster."
-  value       = ibm_container_vpc_cluster.iks_cluster.vpe_service_endpoint_url
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].vpe_service_endpoint_url : ibm_container_vpc_cluster.cluster_with_upgrade[0].vpe_service_endpoint_url) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].vpe_service_endpoint_url : ibm_container_vpc_cluster.iks_cluster[0].vpe_service_endpoint_url)
 }
 
 output "kms_config" {
@@ -78,12 +77,12 @@ output "kms_config" {
 
 output "operating_system" {
   description = "The operating system of the workers in the default worker pool."
-  value       = ibm_container_vpc_cluster.iks_cluster.operating_system
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].operating_system : ibm_container_vpc_cluster.cluster_with_upgrade[0].operating_system) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].operating_system : ibm_container_vpc_cluster.iks_cluster[0].operating_system)
 }
 
 output "master_status" {
   description = "The status of the Kubernetes master."
-  value       = ibm_container_vpc_cluster.iks_cluster.master_status
+  value       = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].master_status : ibm_container_vpc_cluster.cluster_with_upgrade[0].master_status) : (var.ignore_worker_pool_size_changes ? ibm_container_vpc_cluster.autoscaling_cluster[0].master_status : ibm_container_vpc_cluster.iks_cluster[0].master_status)
 }
 
 output "master_vpe" {
@@ -103,5 +102,5 @@ output "registry_vpe" {
 
 output "secrets_manager_integration_config" {
   description = "Information about the Secrets Manager ingress integration (if enabled)."
-  value       = var.enable_secrets_manager_integration ? ibm_container_ingress_instance.instance : null
+  value       = var.enable_secrets_manager_integration ? ibm_container_ingress_instance.instance[0] : null
 }

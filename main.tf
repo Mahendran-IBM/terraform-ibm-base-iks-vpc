@@ -11,8 +11,19 @@ locals {
   create_timeout = "3h"
   update_timeout = "3h"
 
-  cluster_id  = ibm_container_vpc_cluster.iks_cluster.id
-  cluster_crn = ibm_container_vpc_cluster.iks_cluster.crn
+  # tflint-ignore: terraform_unused_declarations
+  cluster_with_upgrade_id = var.ignore_worker_pool_size_changes ? try(ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].id, null) : try(ibm_container_vpc_cluster.cluster_with_upgrade[0].id, null)
+  # tflint-ignore: terraform_unused_declarations
+  cluster_without_upgrade_id = var.ignore_worker_pool_size_changes ? try(ibm_container_vpc_cluster.autoscaling_cluster[0].id, null) : try(ibm_container_vpc_cluster.iks_cluster[0].id, null)
+
+  cluster_id = var.enable_kube_version_upgrade ? local.cluster_with_upgrade_id : local.cluster_without_upgrade_id
+
+  # tflint-ignore: terraform_unused_declarations
+  cluster_with_upgrade_crn = var.ignore_worker_pool_size_changes ? try(ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade[0].crn, null) : try(ibm_container_vpc_cluster.cluster_with_upgrade[0].crn, null)
+  # tflint-ignore: terraform_unused_declarations
+  cluster_without_upgrade_crn = var.ignore_worker_pool_size_changes ? try(ibm_container_vpc_cluster.autoscaling_cluster[0].crn, null) : try(ibm_container_vpc_cluster.iks_cluster[0].crn, null)
+
+  cluster_crn = var.enable_kube_version_upgrade ? local.cluster_with_upgrade_crn : local.cluster_without_upgrade_crn
 
   # security group attached to worker pool
   # the terraform provider / iks api take a security group id hardcoded to "cluster", so this pseudo-value is injected into the array based on attach_default_cluster_security_group
@@ -34,6 +45,7 @@ data "ibm_container_cluster_versions" "cluster_versions" {}
 # ****************************************************************
 
 resource "ibm_container_vpc_cluster" "iks_cluster" {
+  count                               = var.enable_kube_version_upgrade ? 0 : (var.ignore_worker_pool_size_changes ? 0 : 1)
   name                                = var.cluster_name
   vpc_id                              = var.vpc_id
   resource_group_id                   = var.resource_group_id
@@ -47,6 +59,10 @@ resource "ibm_container_vpc_cluster" "iks_cluster" {
   security_groups                     = local.cluster_security_groups
   force_delete_storage                = var.force_delete_storage
   disable_outbound_traffic_protection = var.disable_outbound_traffic_protection
+
+  lifecycle {
+    ignore_changes = [kube_version]
+  }
 
   # default workers are mapped to the subnets that are "private"
   dynamic "zones" {
@@ -85,6 +101,183 @@ resource "ibm_container_vpc_cluster" "iks_cluster" {
     delete = local.delete_timeout
   }
 
+}
+
+# copy of the cluster resource above which allows major kubernetes version upgrade
+resource "ibm_container_vpc_cluster" "cluster_with_upgrade" {
+  count                               = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? 0 : 1) : 0
+  name                                = var.cluster_name
+  vpc_id                              = var.vpc_id
+  resource_group_id                   = var.resource_group_id
+  tags                                = var.tags
+  kube_version                        = local.kube_version
+  flavor                              = local.default_pool.machine_type
+  worker_count                        = local.default_pool.workers_per_zone
+  pod_subnet                          = var.pod_subnet_cidr
+  service_subnet                      = var.service_subnet_cidr
+  operating_system                    = local.default_pool.operating_system
+  security_groups                     = local.cluster_security_groups
+  force_delete_storage                = var.force_delete_storage
+  disable_outbound_traffic_protection = var.disable_outbound_traffic_protection
+
+  # This resource intentionally omits ignore_changes for kube_version to allow major version upgrades
+
+  # default workers are mapped to the subnets that are "private"
+  dynamic "zones" {
+    for_each = local.default_pool.subnet_prefix != null ? var.vpc_subnets[local.default_pool.subnet_prefix] : local.default_pool.vpc_subnets
+    content {
+      subnet_id = zones.value.id
+      name      = zones.value.zone
+    }
+  }
+
+  # Apply taints to the default worker pools i.e private
+  dynamic "taints" {
+    for_each = var.worker_pools_taints == null ? [] : concat(var.worker_pools_taints["all"], var.worker_pools_taints["default"])
+    content {
+      effect = taints.value.effect
+      key    = taints.value.key
+      value  = taints.value.value
+    }
+  }
+
+  dynamic "kms_config" {
+    for_each = var.kms_config != null ? [1] : []
+    content {
+      crk_id           = var.kms_config.crk_id
+      instance_id      = var.kms_config.instance_id
+      private_endpoint = var.kms_config.private_endpoint
+      account_id       = var.kms_config.account_id
+      wait_for_apply   = var.kms_config.wait_for_apply
+    }
+  }
+
+  timeouts {
+    # Extend create, update and delete timeout to static values.
+    create = local.create_timeout
+    update = local.update_timeout
+    delete = local.delete_timeout
+  }
+}
+
+
+# copy of the cluster resource above which ignores changes to the worker pool for use in autoscaling scenarios
+resource "ibm_container_vpc_cluster" "autoscaling_cluster" {
+  count                               = var.enable_kube_version_upgrade ? 0 : (var.ignore_worker_pool_size_changes ? 1 : 0)
+  name                                = var.cluster_name
+  vpc_id                              = var.vpc_id
+  resource_group_id                   = var.resource_group_id
+  tags                                = var.tags
+  kube_version                        = local.kube_version
+  flavor                              = local.default_pool.machine_type
+  worker_count                        = local.default_pool.workers_per_zone
+  pod_subnet                          = var.pod_subnet_cidr
+  service_subnet                      = var.service_subnet_cidr
+  operating_system                    = local.default_pool.operating_system
+  security_groups                     = local.cluster_security_groups
+  force_delete_storage                = var.force_delete_storage
+  disable_outbound_traffic_protection = var.disable_outbound_traffic_protection
+
+  lifecycle {
+    ignore_changes = [kube_version, worker_count]
+  }
+
+  # default workers are mapped to the subnets that are "private"
+  dynamic "zones" {
+    for_each = local.default_pool.subnet_prefix != null ? var.vpc_subnets[local.default_pool.subnet_prefix] : local.default_pool.vpc_subnets
+    content {
+      subnet_id = zones.value.id
+      name      = zones.value.zone
+    }
+  }
+
+  # Apply taints to the default worker pools i.e private
+  dynamic "taints" {
+    for_each = var.worker_pools_taints == null ? [] : concat(var.worker_pools_taints["all"], var.worker_pools_taints["default"])
+    content {
+      effect = taints.value.effect
+      key    = taints.value.key
+      value  = taints.value.value
+    }
+  }
+
+  dynamic "kms_config" {
+    for_each = var.kms_config != null ? [1] : []
+    content {
+      crk_id           = var.kms_config.crk_id
+      instance_id      = var.kms_config.instance_id
+      private_endpoint = var.kms_config.private_endpoint
+      account_id       = var.kms_config.account_id
+      wait_for_apply   = var.kms_config.wait_for_apply
+    }
+  }
+
+  timeouts {
+    # Extend create, update and delete timeout to static values.
+    create = local.create_timeout
+    update = local.update_timeout
+    delete = local.delete_timeout
+  }
+
+}
+
+# copy of the cluster resource above which allows major kubernetes version upgrade
+resource "ibm_container_vpc_cluster" "autoscaling_cluster_with_upgrade" {
+  count                               = var.enable_kube_version_upgrade ? (var.ignore_worker_pool_size_changes ? 1 : 0) : 0
+  name                                = var.cluster_name
+  vpc_id                              = var.vpc_id
+  resource_group_id                   = var.resource_group_id
+  tags                                = var.tags
+  kube_version                        = local.kube_version
+  flavor                              = local.default_pool.machine_type
+  worker_count                        = local.default_pool.workers_per_zone
+  pod_subnet                          = var.pod_subnet_cidr
+  service_subnet                      = var.service_subnet_cidr
+  operating_system                    = local.default_pool.operating_system
+  security_groups                     = local.cluster_security_groups
+  force_delete_storage                = var.force_delete_storage
+  disable_outbound_traffic_protection = var.disable_outbound_traffic_protection
+
+  lifecycle {
+    ignore_changes = [worker_count]
+  }
+
+  # default workers are mapped to the subnets that are "private"
+  dynamic "zones" {
+    for_each = local.default_pool.subnet_prefix != null ? var.vpc_subnets[local.default_pool.subnet_prefix] : local.default_pool.vpc_subnets
+    content {
+      subnet_id = zones.value.id
+      name      = zones.value.zone
+    }
+  }
+
+  # Apply taints to the default worker pools i.e private
+  dynamic "taints" {
+    for_each = var.worker_pools_taints == null ? [] : concat(var.worker_pools_taints["all"], var.worker_pools_taints["default"])
+    content {
+      effect = taints.value.effect
+      key    = taints.value.key
+      value  = taints.value.value
+    }
+  }
+
+  dynamic "kms_config" {
+    for_each = var.kms_config != null ? [1] : []
+    content {
+      crk_id           = var.kms_config.crk_id
+      instance_id      = var.kms_config.instance_id
+      private_endpoint = var.kms_config.private_endpoint
+      account_id       = var.kms_config.account_id
+      wait_for_apply   = var.kms_config.wait_for_apply
+    }
+  }
+
+  timeouts {
+    # Extend create, update and delete timeout to static values.
+    create = local.create_timeout
+    update = local.update_timeout
+    delete = local.delete_timeout
+  }
 }
 
 ##############################################################################
@@ -154,7 +347,13 @@ resource "null_resource" "confirm_network_healthy" {
   # Worker pool creation can start before the 'ibm_container_vpc_cluster' completes since there is no explicit
   # depends_on in 'ibm_container_vpc_worker_pool', just an implicit depends_on on the cluster ID. Cluster ID can exist before
   # 'ibm_container_vpc_cluster' completes, so hence need to add explicit depends on against 'ibm_container_vpc_cluster' here.
-  depends_on = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools]
+  depends_on = [
+    ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools
+  ]
 
   provisioner "local-exec" {
     command     = "${path.module}/scripts/confirm_network_healthy.sh"
@@ -192,7 +391,15 @@ resource "ibm_container_addons" "addons" {
   # Worker pool creation can start before the 'ibm_container_vpc_cluster' completes since there is no explicit
   # depends_on in 'ibm_container_vpc_worker_pool', just an implicit depends_on on the cluster ID. Cluster ID can exist before
   # 'ibm_container_vpc_cluster' completes, so hence need to add explicit depends on against 'ibm_container_vpc_cluster' here.
-  depends_on        = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools, null_resource.confirm_network_healthy]
+  depends_on = [
+    ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools,
+    null_resource.confirm_network_healthy
+  ]
+
   cluster           = local.cluster_id
   resource_group_id = var.resource_group_id
 
@@ -263,8 +470,16 @@ resource "kubernetes_config_map_v1_data" "set_autoscaling" {
 ##############################################################################
 
 data "ibm_is_lbs" "all_lbs" {
-  depends_on = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools, null_resource.confirm_network_healthy]
-  count      = length(var.additional_lb_security_group_ids) > 0 ? 1 : 0
+  depends_on = [
+    ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools,
+    null_resource.confirm_network_healthy
+  ]
+
+  count = length(var.additional_lb_security_group_ids) > 0 ? 1 : 0
 }
 
 locals {
@@ -279,8 +494,6 @@ module "attach_sg_to_lb" {
   use_existing_security_group_id = true
   target_ids                     = [for index in range(var.number_of_lbs) : local.lbs_associated_with_cluster[index]] # number_of_lbs is necessary to give a static number of elements to tf to accomplish the apply when the cluster does not initially exists
 }
-
-
 
 ##############################################################################
 # Attach additional security groups to the load balancers managed by this
@@ -298,21 +511,41 @@ locals {
 }
 
 data "ibm_is_virtual_endpoint_gateway" "master_vpe" {
-  count      = length(var.additional_vpe_security_group_ids["master"])
-  depends_on = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools, null_resource.confirm_network_healthy]
-  name       = local.vpes_to_attach_to_sg["master"]
+  count = length(var.additional_vpe_security_group_ids["master"])
+  depends_on = [ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools,
+    null_resource.confirm_network_healthy
+  ]
+  name = local.vpes_to_attach_to_sg["master"]
 }
 
 data "ibm_is_virtual_endpoint_gateway" "api_vpe" {
-  count      = length(var.additional_vpe_security_group_ids["api"])
-  depends_on = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools, null_resource.confirm_network_healthy]
-  name       = local.vpes_to_attach_to_sg["api"]
+  count = length(var.additional_vpe_security_group_ids["api"])
+  depends_on = [
+    ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools,
+    null_resource.confirm_network_healthy
+  ]
+  name = local.vpes_to_attach_to_sg["api"]
 }
 
 data "ibm_is_virtual_endpoint_gateway" "registry_vpe" {
-  count      = length(var.additional_vpe_security_group_ids["registry"])
-  depends_on = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools, null_resource.confirm_network_healthy]
-  name       = local.vpes_to_attach_to_sg["registry"]
+  count = length(var.additional_vpe_security_group_ids["registry"])
+  depends_on = [
+    ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools,
+    null_resource.confirm_network_healthy
+  ]
+  name = local.vpes_to_attach_to_sg["registry"]
 }
 
 locals {
@@ -404,8 +637,14 @@ module "existing_secrets_manager_instance_parser" {
 }
 
 resource "ibm_iam_authorization_policy" "secrets_manager_iam_auth_policy" {
-  count                       = var.enable_secrets_manager_integration && !var.skip_secrets_manager_iam_auth_policy ? 1 : 0
-  depends_on                  = [ibm_container_vpc_cluster.iks_cluster, module.worker_pools]
+  count = var.enable_secrets_manager_integration && !var.skip_secrets_manager_iam_auth_policy ? 1 : 0
+  depends_on = [
+    ibm_container_vpc_cluster.iks_cluster,
+    ibm_container_vpc_cluster.cluster_with_upgrade,
+    ibm_container_vpc_cluster.autoscaling_cluster,
+    ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
+    module.worker_pools
+  ]
   source_service_name         = "containers-kubernetes"
   source_resource_instance_id = local.cluster_id
   target_service_name         = "secrets-manager"
