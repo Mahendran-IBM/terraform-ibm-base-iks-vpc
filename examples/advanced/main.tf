@@ -179,6 +179,7 @@ module "iks_base" {
   vpc_subnets                         = local.cluster_vpc_subnets
   worker_pools                        = local.worker_pools
   access_tags                         = var.access_tags
+  kube_version                        = var.kube_version
   worker_pools_taints                 = local.worker_pools_taints
   disable_outbound_traffic_protection = true # set as True to enable outbound traffic from cluster workers
   ignore_worker_pool_size_changes     = true

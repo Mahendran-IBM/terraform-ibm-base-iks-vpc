@@ -139,6 +139,9 @@ statement instead the previous block.
 |------|------|
 | [ibm_container_addons.addons](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/container_addons) | resource |
 | [ibm_container_ingress_instance.instance](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/container_ingress_instance) | resource |
+| [ibm_container_vpc_cluster.autoscaling_cluster](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/container_vpc_cluster) | resource |
+| [ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/container_vpc_cluster) | resource |
+| [ibm_container_vpc_cluster.cluster_with_upgrade](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/container_vpc_cluster) | resource |
 | [ibm_container_vpc_cluster.iks_cluster](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/container_vpc_cluster) | resource |
 | [ibm_iam_authorization_policy.secrets_manager_iam_auth_policy](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/iam_authorization_policy) | resource |
 | [ibm_resource_tag.cluster_access_tag](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/resource_tag) | resource |
@@ -169,6 +172,7 @@ statement instead the previous block.
 | <a name="input_cluster_name"></a> [cluster\_name](#input\_cluster\_name) | The name that is assigned to the provisioned cluster. | `string` | n/a | yes |
 | <a name="input_custom_security_group_ids"></a> [custom\_security\_group\_ids](#input\_custom\_security\_group\_ids) | Security groups to add to all worker nodes. This comes in addition to the IBM maintained security group if `attach_ibm_managed_security_group` is set to true. If this variable is set, the default VPC security group is NOT assigned to the worker nodes. | `list(string)` | `null` | no |
 | <a name="input_disable_outbound_traffic_protection"></a> [disable\_outbound\_traffic\_protection](#input\_disable\_outbound\_traffic\_protection) | Whether to allow public outbound access from the cluster workers. Set per your environment's security requirements. | `bool` | `false` | no |
+| <a name="input_enable_kube_version_upgrade"></a> [enable\_kube\_version\_upgrade](#input\_enable\_kube\_version\_upgrade) | When set to true, allows Terraform to manage major Kubernetes version upgrades. This is intended for advanced users who manually control major version upgrades. Defaults to false to avoid unintended drift from IBM-managed patch updates. NOTE: Enabling this on existing clusters requires a one-time terraform state migration. | `bool` | `false` | no |
 | <a name="input_enable_secrets_manager_integration"></a> [enable\_secrets\_manager\_integration](#input\_enable\_secrets\_manager\_integration) | Integrate with IBM Cloud Secrets Manager to manage Ingress certificates and other secrets. | `bool` | `false` | no |
 | <a name="input_existing_secrets_manager_instance_crn"></a> [existing\_secrets\_manager\_instance\_crn](#input\_existing\_secrets\_manager\_instance\_crn) | CRN of the Secrets Manager instance where Ingress certificate secrets are stored. Required if secrets manager integration is enabled. | `string` | `null` | no |
 | <a name="input_force_delete_storage"></a> [force\_delete\_storage](#input\_force\_delete\_storage) | Flag indicating whether or not to delete attached storage when destroying the cluster. | `bool` | `false` | no |
