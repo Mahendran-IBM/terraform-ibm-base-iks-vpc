@@ -53,6 +53,7 @@ resource "ibm_container_vpc_cluster" "iks_cluster" {
   kube_version                        = local.kube_version
   flavor                              = local.default_pool.machine_type
   worker_count                        = local.default_pool.workers_per_zone
+  wait_till                           = var.cluster_ready_when
   pod_subnet                          = var.pod_subnet_cidr
   service_subnet                      = var.service_subnet_cidr
   operating_system                    = local.default_pool.operating_system
@@ -113,6 +114,7 @@ resource "ibm_container_vpc_cluster" "cluster_with_upgrade" {
   kube_version                        = local.kube_version
   flavor                              = local.default_pool.machine_type
   worker_count                        = local.default_pool.workers_per_zone
+  wait_till                           = var.cluster_ready_when
   pod_subnet                          = var.pod_subnet_cidr
   service_subnet                      = var.service_subnet_cidr
   operating_system                    = local.default_pool.operating_system
@@ -171,6 +173,7 @@ resource "ibm_container_vpc_cluster" "autoscaling_cluster" {
   kube_version                        = local.kube_version
   flavor                              = local.default_pool.machine_type
   worker_count                        = local.default_pool.workers_per_zone
+  wait_till                           = var.cluster_ready_when
   pod_subnet                          = var.pod_subnet_cidr
   service_subnet                      = var.service_subnet_cidr
   operating_system                    = local.default_pool.operating_system
@@ -231,6 +234,7 @@ resource "ibm_container_vpc_cluster" "autoscaling_cluster_with_upgrade" {
   kube_version                        = local.kube_version
   flavor                              = local.default_pool.machine_type
   worker_count                        = local.default_pool.workers_per_zone
+  wait_till                           = var.cluster_ready_when
   pod_subnet                          = var.pod_subnet_cidr
   service_subnet                      = var.service_subnet_cidr
   operating_system                    = local.default_pool.operating_system

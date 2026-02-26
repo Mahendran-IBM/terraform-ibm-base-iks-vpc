@@ -41,6 +41,17 @@ variable "allow_default_worker_pool_replacement" {
   nullable    = false
 }
 
+variable "cluster_ready_when" {
+  type        = string
+  description = "The cluster is ready based on one of the following:: MasterNodeReady (not recommended), OneWorkerNodeReady, Normal, IngressReady"
+  default     = "IngressReady"
+
+  validation {
+    condition     = contains(["MasterNodeReady", "OneWorkerNodeReady", "Normal", "IngressReady"], var.cluster_ready_when)
+    error_message = "The input variable cluster_ready_when must be one of the following: \"MasterNodeReady\", \"OneWorkerNodeReady\", \"Normal\" or \"IngressReady\"."
+  }
+}
+
 # Worker pools: shape retained; validations updated for IKS
 variable "worker_pools" {
   type = list(object({
