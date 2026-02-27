@@ -11,7 +11,8 @@ provider "kubernetes" {
   host                   = data.ibm_container_cluster_config.cluster_config.host
   token                  = data.ibm_container_cluster_config.cluster_config.token
   cluster_ca_certificate = data.ibm_container_cluster_config.cluster_config.ca_certificate
-  config_path            = data.ibm_container_cluster_config.cluster_config.config_file_path
+  # config_path is required when deploying IKS cluster
+  config_path = data.ibm_container_cluster_config.cluster_config.config_file_path
 }
 
 provider "helm" {
@@ -19,6 +20,8 @@ provider "helm" {
     host                   = data.ibm_container_cluster_config.cluster_config.host
     token                  = data.ibm_container_cluster_config.cluster_config.token
     cluster_ca_certificate = data.ibm_container_cluster_config.cluster_config.ca_certificate
+    # config_path is required when deploying IKS cluster
+    config_path = data.ibm_container_cluster_config.cluster_config.config_file_path
   }
   # IBM Cloud credentials are required to authenticate to the helm repo
   registries = [{
