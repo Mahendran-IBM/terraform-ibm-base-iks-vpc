@@ -373,8 +373,12 @@ resource "null_resource" "confirm_network_healthy" {
 # Addons
 ##############################################################################
 
+locals {
+  addons = { for addon_name, addon_version in(var.addons != null ? var.addons : {}) : addon_name => addon_version if addon_version != null }
+}
+
 resource "ibm_container_addons" "addons" {
-  count = length(var.addons) > 0 ? 1 : 0
+  count = length(local.addons) > 0 ? 1 : 0
   depends_on = [
     ibm_container_vpc_cluster.iks_cluster,
     ibm_container_vpc_cluster.cluster_with_upgrade,
@@ -391,7 +395,7 @@ resource "ibm_container_addons" "addons" {
   manage_all_addons = var.manage_all_addons
 
   dynamic "addons" {
-    for_each = var.addons
+    for_each = local.addons
     content {
       name            = addons.key
       version         = lookup(addons.value, "version", null)
