@@ -149,7 +149,6 @@ statement instead the previous block.
 | [null_resource.config_map_status](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
 | [null_resource.confirm_network_healthy](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
 | [time_sleep.wait_for_auth_policy](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) | resource |
-| [ibm_container_addons.existing_addons](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/data-sources/container_addons) | data source |
 | [ibm_container_cluster_config.cluster_config](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/data-sources/container_cluster_config) | data source |
 | [ibm_container_cluster_versions.cluster_versions](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/data-sources/container_cluster_versions) | data source |
 | [ibm_is_lbs.all_lbs](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/data-sources/is_lbs) | data source |
