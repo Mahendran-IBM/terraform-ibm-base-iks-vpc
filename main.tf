@@ -35,10 +35,24 @@ locals {
   # attach_ibm_managed_security_group is false and custom_security_group_ids is set => only use the custom security group ids
   cluster_security_groups = var.attach_ibm_managed_security_group == true ? (var.custom_security_group_ids == null ? null : concat(["cluster"], var.custom_security_group_ids)) : (var.custom_security_group_ids == null ? null : var.custom_security_group_ids)
 
+  binaries_path = "/tmp"
 }
 
 # Lookup the current default kube version
 data "ibm_container_cluster_versions" "cluster_versions" {}
+
+resource "terraform_data" "install_required_binaries" {
+  count = var.install_required_binaries && (var.verify_worker_network_readiness || lookup(var.addons, "cluster-autoscaler", null) != null) ? 1 : 0
+  triggers_replace = {
+    verify_worker_network_readiness = var.verify_worker_network_readiness
+    cluster_autoscaler              = lookup(var.addons, "cluster-autoscaler", null) != null
+  }
+  provisioner "local-exec" {
+    # Using the script from the kube-audit module to avoid code duplication.
+    command     = "${path.module}/scripts/install-binaries.sh ${local.binaries_path}"
+    interpreter = ["/bin/bash", "-c"]
+  }
+}
 
 # ****************************************************************
 #                     CREATE A IKS CLUSTER
@@ -345,7 +359,7 @@ module "worker_pools" {
 
 ##############################################################################
 
-resource "null_resource" "confirm_network_healthy" {
+resource "terraform_data" "confirm_network_healthy" {
 
   count = var.verify_worker_network_readiness ? 1 : 0
 
@@ -353,6 +367,7 @@ resource "null_resource" "confirm_network_healthy" {
   # depends_on in 'ibm_container_vpc_worker_pool', just an implicit depends_on on the cluster ID. Cluster ID can exist before
   # 'ibm_container_vpc_cluster' completes, so hence need to add explicit depends on against 'ibm_container_vpc_cluster' here.
   depends_on = [
+    terraform_data.install_required_binaries,
     ibm_container_vpc_cluster.iks_cluster,
     ibm_container_vpc_cluster.cluster_with_upgrade,
     ibm_container_vpc_cluster.autoscaling_cluster,
@@ -385,7 +400,7 @@ resource "ibm_container_addons" "addons" {
     ibm_container_vpc_cluster.autoscaling_cluster,
     ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
     module.worker_pools,
-    null_resource.confirm_network_healthy
+    terraform_data.confirm_network_healthy
   ]
 
   cluster           = local.cluster_id
@@ -421,9 +436,9 @@ locals {
 
 }
 
-resource "null_resource" "config_map_status" {
+resource "terraform_data" "config_map_status" {
   count      = lookup(var.addons, "cluster-autoscaler", null) != null ? 1 : 0
-  depends_on = [ibm_container_addons.addons]
+  depends_on = [terraform_data.install_required_binaries, ibm_container_addons.addons]
 
   provisioner "local-exec" {
     command     = "${path.module}/scripts/get_config_map_status.sh"
@@ -436,7 +451,7 @@ resource "null_resource" "config_map_status" {
 
 resource "kubernetes_config_map_v1_data" "set_autoscaling" {
   count      = lookup(var.addons, "cluster-autoscaler", null) != null ? 1 : 0
-  depends_on = [null_resource.config_map_status]
+  depends_on = [terraform_data.config_map_status]
 
   metadata {
     name      = "iks-ca-configmap"
@@ -464,7 +479,7 @@ data "ibm_is_lbs" "all_lbs" {
     ibm_container_vpc_cluster.autoscaling_cluster,
     ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
     module.worker_pools,
-    null_resource.confirm_network_healthy
+    terraform_data.confirm_network_healthy
   ]
 
   count = length(var.additional_lb_security_group_ids) > 0 ? 1 : 0
@@ -505,7 +520,7 @@ data "ibm_is_virtual_endpoint_gateway" "master_vpe" {
     ibm_container_vpc_cluster.autoscaling_cluster,
     ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
     module.worker_pools,
-    null_resource.confirm_network_healthy
+    terraform_data.confirm_network_healthy
   ]
   name = local.vpes_to_attach_to_sg["master"]
 }
@@ -518,7 +533,7 @@ data "ibm_is_virtual_endpoint_gateway" "api_vpe" {
     ibm_container_vpc_cluster.autoscaling_cluster,
     ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
     module.worker_pools,
-    null_resource.confirm_network_healthy
+    terraform_data.confirm_network_healthy
   ]
   name = local.vpes_to_attach_to_sg["api"]
 }
@@ -531,7 +546,7 @@ data "ibm_is_virtual_endpoint_gateway" "registry_vpe" {
     ibm_container_vpc_cluster.autoscaling_cluster,
     ibm_container_vpc_cluster.autoscaling_cluster_with_upgrade,
     module.worker_pools,
-    null_resource.confirm_network_healthy
+    terraform_data.confirm_network_healthy
   ]
   name = local.vpes_to_attach_to_sg["registry"]
 }

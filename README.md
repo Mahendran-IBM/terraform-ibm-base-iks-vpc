@@ -1,33 +1,35 @@
-<!-- Update this title with a descriptive name. Use sentence case. -->
-# Terraform modules template project
+# IBM Cloud Kubernetes Service (IKS) on VPC infrastructure module
 
-<!--
-Update status and "latest release" badges:
-  1. For the status options, see https://terraform-ibm-modules.github.io/documentation/#/badge-status
-  2. Update the "latest release" badge to point to the correct module's repo. Replace "terraform-ibm-module-template" in two places.
--->
-[![Incubating (Not yet consumable)](https://img.shields.io/badge/status-Incubating%20(Not%20yet%20consumable)-red)](https://terraform-ibm-modules.github.io/documentation/#/badge-status)
+[![Graduated (Supported)](https://img.shields.io/badge/Status-Graduated%20(Supported)-brightgreen)](https://terraform-ibm-modules.github.io/documentation/#/badge-status)
 [![latest release](https://img.shields.io/github/v/release/terraform-ibm-modules/terraform-ibm-base-iks-vpc?logo=GitHub&sort=semver)](https://github.com/terraform-ibm-modules/terraform-ibm-base-iks-vpc/releases/latest)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com/)
 [![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
+[![Terraform Registry](https://img.shields.io/badge/terraform-registry-623CE4?logo=terraform)](https://registry.terraform.io/modules/terraform-ibm-modules/base-iks-vpc/ibm/latest)
 
-<!--
-Add a description of modules in this repo.
-Expand on the repo short description in the .github/settings.yml file.
+Use this module to provision an [IBM Cloud Kubernetes Service cluster](https://cloud.ibm.com/docs/containers?topic=containers-getting-started) on VPC Gen2. The module supports optionally passing a key management configuration for secret encryption and boot volume encryption.
 
-For information, see "Module names and descriptions" at
-https://terraform-ibm-modules.github.io/documentation/#/implementation-guidelines?id=module-names-and-descriptions
--->
+Optionally, the module supports advanced security group management for the worker nodes, VPE, and load balancer associated with the cluster. This feature allows you to configure security groups for the cluster's worker nodes, VPE, and load balancer.
 
-TODO: Replace this with a description of the modules in this repo.
+By default, the module automatically downloads the required dependant binaries ([jq](https://jqlang.github.io/jq) and [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)) from the public internet if they are not detected in the terraform runtime. You can disable this behavior by setting `install_required_binaries` to `false`.
 
+## Helpful resources
+
+- [Understanding IBM Cloud Kubernetes Service](https://cloud.ibm.com/docs/containers?topic=containers-overview)
+- [Understanding secure by default Cluster VPC Networking](https://cloud.ibm.com/docs/containers?topic=containers-vpc-security-group-reference&interface=ui)
+- [Upgrading Kubernetes version using Terraform](./docs/kube-version-upgrade.md)
+- [How to re-create the default worker pool](./docs/default-worker-pool-mgmt.md)
+- [Advanced security group configuration options](./docs/security-group-management.md)
+- [Setting up encryption for Block Storage for VPC](https://cloud.ibm.com/docs/containers?topic=containers-vpc-block#vpc-block-encryption)
+- [Setting up KMS encryption for File Storage for VPC](https://cloud.ibm.com/docs/containers?topic=containers-storage-file-vpc-apps#storage-file-kms)
+- [Getting started with custom service endpoints](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/guides/custom-service-endpoints#getting-started-with-custom-service-endpoints)
 
 <!-- The following content is automatically populated by the pre-commit hook -->
 <!-- BEGIN OVERVIEW HOOK -->
 ## Overview
 * [terraform-ibm-base-iks-vpc](#terraform-ibm-base-iks-vpc)
 * [Submodules](./modules)
+    * [worker-pool](./modules/worker-pool)
 * [Examples](./examples)
 :information_source: Ctrl/Cmd+Click or right-click on the Schematics deploy button to open in a new tab
     * <a href="./examples/advanced">Advanced example</a> <a href="https://cloud.ibm.com/schematics/workspaces/create?workspace_name=base-iks-vpc-advanced-example&repository=https://github.com/terraform-ibm-modules/terraform-ibm-base-iks-vpc/tree/main/examples/advanced"><img src="https://img.shields.io/badge/Deploy%20with IBM%20Cloud%20Schematics-0f62fe?logo=ibm&logoColor=white&labelColor=0f62fe" alt="Deploy with IBM Cloud Schematics" style="height: 16px; vertical-align: text-bottom; margin-left: 5px;"></a>
@@ -40,13 +42,6 @@ TODO: Replace this with a description of the modules in this repo.
 ## terraform-ibm-base-iks-vpc
 
 ### Usage
-
-<!--
-Add an example of the use of the module in the following code block.
-
-Use real values instead of "var.<var_name>" or other placeholder values
-unless real values don't help users know what to change.
--->
 
 ```hcl
 terraform {
@@ -68,45 +63,107 @@ provider "ibm" {
   region           = local.region
 }
 
-module "module_template" {
-  source            = "terraform-ibm-modules/<replace>/ibm"
-  version           = "X.Y.Z" # Replace "X.Y.Z" with a release version to lock into a specific release
-  region            = local.region
-  name              = "instance-name"
-  resource_group_id = "xxXXxxXXxXxXXXXxxXxxxXXXXxXXXXX" # Replace with the actual ID of resource group to use
+module "iks_base" {
+  source               = "terraform-ibm-modules/base-iks-vpc/ibm"
+  version              = "X.Y.Z" # Replace "X.Y.Z" with a release version to lock into a specific release
+  cluster_name         = "example-cluster-name"
+  resource_group_id    = "xxXXxxXXxXxXXXXxxXxxxXXXXxXXXXX"
+  region               = local.region
+  force_delete_storage = true
+  vpc_id               = "79cxxxx-xxxx-xxxx-xxxx-xxxxxXX8667"
+  # obtain the below values from the targeted VPC and adjust to the number of zones, subnets, subnet name, cidr_block, id, zone
+  vpc_subnets          = {
+    zone-1    = [
+        {
+            cidr_block = "192.168.32.0/22"
+            id         = "0717-afc29fbb-0dbe-493a-a5b9-f3c5899cb8b9"
+            zone       = "us-south-1"
+        },
+        {
+            cidr_block = "192.168.36.0/22"
+            id         = "0727-d65c1eda-9e38-4200-8452-cb8ff5bb3140"
+            zone       = "us-south-2"
+        },
+        {
+            cidr_block = "192.168.40.0/22"
+            id         = "0737-9a823cd3-16bf-4ba4-a429-9e1fc7db74b8"
+            zone       = "us-south-3"
+        }
+    ]
+    zone-2 = [
+        {
+            cidr_block = "192.168.0.0/22"
+            id         = "0717-846b9490-34ae-4a6c-8288-28112dca1ba3"
+            zone       = "us-south-1"
+        },
+        {
+            cidr_block = "192.168.4.0/22"
+            id         = "0727-ef8db7f6-ffa5-4d8b-a317-4631741a45ee"
+            zone       = "us-south-2"
+        },
+        {
+            cidr_block = "192.168.8.0/22"
+            id         = "0737-c9a6d871-d95b-4914-abf5-82c22f4161d1"
+            zone       = "us-south-3"
+        }
+    ]
+    zone-3 = [
+        {
+            cidr_block = "192.168.16.0/22"
+            id         = "0717-d46e227c-89d4-4b02-9008-d03907a275b6"
+            zone       = "us-south-1"
+        },
+        {
+            cidr_block = "192.168.20.0/22"
+            id         = "0727-93b1edcb-966c-4517-a7af-6ac63cd93adf"
+            zone       = "us-south-2"
+        },
+        {
+            cidr_block = "192.168.24.0/22"
+            id         = "0737-807ec4f1-4d84-484e-b2f4-62dd5e431065"
+            zone       = "us-south-3"
+        }
+    ]
+  }
+  worker_pools         = [
+    {
+      subnet_prefix    = "default"
+      pool_name        = "default"
+      machine_type     = "bx2.4x16"
+      workers_per_zone = 2
+      operating_system = "REDHAT_8_64"
+    }
+  ]
 }
 ```
 
-### Required access policies
+### Required IAM access policies
 
-<!-- PERMISSIONS REQUIRED TO RUN MODULE
-If this module requires permissions, uncomment the following block and update
-the sample permissions, following the format.
-Replace the 'Sample IBM Cloud' service and roles with applicable values.
-The required information can usually be found in the services official
-IBM Cloud documentation.
-To view all available service permissions, you can go in the
-console at Manage > Access (IAM) > Access groups and click into an existing group
-(or create a new one) and in the 'Access' tab click 'Assign access'.
--->
+You need the following permissions to run this module.
 
-<!--
-You need the following permissions to run this module:
+- Account Management
+  - **All Identity and Access Enabled** service
+    - `Viewer` platform access
+  - **All Resource Groups** service
+    - `Viewer` platform access
+- IAM Services
+  - **Cloud Object Storage** service
+    - `Editor` platform access
+    - `Manager` service access
+  - **Kubernetes** service
+    - `Administrator` platform access
+    - `Manager` service access
+  - **VPC Infrastructure** service
+    - `Administrator` platform access
+    - `Manager` service access
+  - **IAM Identity Service** service
+    - `User API key creator` service access
 
-- Service
-    - **Resource group only**
-        - `Viewer` access on the specific resource group
-    - **Sample IBM Cloud** service
-        - `Editor` platform access
-        - `Manager` service access
--->
+Optionally, you need the following permissions to attach Access Management tags to resources in this module.
 
-<!-- NO PERMISSIONS FOR MODULE
-If no permissions are required for the module, uncomment the following
-statement instead the previous block.
--->
-
-<!-- No permissions are needed to run this module.-->
+- IAM Services
+  - **Tagging** service
+    - `Administrator` platform access
 
 
 <!-- The following content is automatically populated by the pre-commit hook -->
@@ -118,7 +175,6 @@ statement instead the previous block.
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.9.0 |
 | <a name="requirement_ibm"></a> [ibm](#requirement\_ibm) | >= 1.86.0, < 2.0.0 |
 | <a name="requirement_kubernetes"></a> [kubernetes](#requirement\_kubernetes) | >= 2.16.1, < 3.0.0 |
-| <a name="requirement_null"></a> [null](#requirement\_null) | >= 3.2.1, < 4.0.0 |
 | <a name="requirement_time"></a> [time](#requirement\_time) | >= 0.9.1, < 1.0.0 |
 
 ### Modules
@@ -146,8 +202,9 @@ statement instead the previous block.
 | [ibm_iam_authorization_policy.secrets_manager_iam_auth_policy](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/iam_authorization_policy) | resource |
 | [ibm_resource_tag.cluster_access_tag](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/resources/resource_tag) | resource |
 | [kubernetes_config_map_v1_data.set_autoscaling](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs/resources/config_map_v1_data) | resource |
-| [null_resource.config_map_status](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
-| [null_resource.confirm_network_healthy](https://registry.terraform.io/providers/hashicorp/null/latest/docs/resources/resource) | resource |
+| [terraform_data.config_map_status](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
+| [terraform_data.confirm_network_healthy](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
+| [terraform_data.install_required_binaries](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [time_sleep.wait_for_auth_policy](https://registry.terraform.io/providers/hashicorp/time/latest/docs/resources/sleep) | resource |
 | [ibm_container_cluster_config.cluster_config](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/data-sources/container_cluster_config) | data source |
 | [ibm_container_cluster_versions.cluster_versions](https://registry.terraform.io/providers/IBM-Cloud/ibm/latest/docs/data-sources/container_cluster_versions) | data source |
@@ -177,6 +234,7 @@ statement instead the previous block.
 | <a name="input_existing_secrets_manager_instance_crn"></a> [existing\_secrets\_manager\_instance\_crn](#input\_existing\_secrets\_manager\_instance\_crn) | CRN of the Secrets Manager instance where Ingress certificate secrets are stored. Required if secrets manager integration is enabled. | `string` | `null` | no |
 | <a name="input_force_delete_storage"></a> [force\_delete\_storage](#input\_force\_delete\_storage) | Flag indicating whether or not to delete attached storage when destroying the cluster. | `bool` | `false` | no |
 | <a name="input_ignore_worker_pool_size_changes"></a> [ignore\_worker\_pool\_size\_changes](#input\_ignore\_worker\_pool\_size\_changes) | Enable if using worker autoscaling. Stops Terraform managing worker count | `bool` | `false` | no |
+| <a name="input_install_required_binaries"></a> [install\_required\_binaries](#input\_install\_required\_binaries) | When set to true, a script will run to check if `kubectl` and `jq` exist on the runtime and if not attempt to download them from the public internet and install them to /tmp. Set to false to skip running this script. | `bool` | `true` | no |
 | <a name="input_kms_config"></a> [kms\_config](#input\_kms\_config) | Use to attach a KMS instance to the cluster. If account\_id is not provided, defaults to the account in use. | <pre>object({<br/>    crk_id           = string<br/>    instance_id      = string<br/>    private_endpoint = optional(bool, true) # defaults to true<br/>    account_id       = optional(string)     # To attach KMS instance from another account<br/>    wait_for_apply   = optional(bool, true) # defaults to true so terraform will wait until the KMS is applied to the master<br/>  })</pre> | `null` | no |
 | <a name="input_kube_version"></a> [kube\_version](#input\_kube\_version) | The version of Kubernetes cluster that should be provisioned (format 1.x). If no value is specified, the current default version is used. You can also specify `default`. This input is used only during initial cluster provisioning and is ignored for updates. | `string` | `null` | no |
 | <a name="input_manage_all_addons"></a> [manage\_all\_addons](#input\_manage\_all\_addons) | Instructs Terraform to manage all cluster addons, even if addons were installed outside of the module. | `bool` | `false` | no |
